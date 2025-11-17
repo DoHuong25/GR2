@@ -1,0 +1,32 @@
+{
+  "name": "be",
+  "version": "1.0.0",
+  "description": "Backend API cho dự án cửa hàng hải sản (Node.js/Express/MongoDB)",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",   
+    "dev": "nodemon app.js",  
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "express",
+    "mongodb",
+    "react-api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-session": "^1.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.19.2",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
