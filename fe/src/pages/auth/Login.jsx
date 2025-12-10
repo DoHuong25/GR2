@@ -1,3 +1,4 @@
+// src/pages/auth/Login.jsx
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Auth } from "@/services/auth";
@@ -10,16 +11,31 @@ export default function Login() {
   const nav = useNavigate();
 
   const onSubmit = async (e) => {
-    e.preventDefault();
-    setErr("");
-    try {
-      await Auth.login({ email, password });
-      nav("/");
-      location.reload();
-    } catch (e) {
-      setErr(e?.response?.data?.message || "Đăng nhập thất bại.");
+  e.preventDefault();
+  setErr("");
+
+  try {
+    const data = await Auth.login({ email, password });
+    const role = data?.user?.role;
+
+    // Phát event để Header biết token thay đổi
+    window.dispatchEvent(new Event("tokenChanged"));
+
+    if (role === "admin") {
+      // Admin → Dashboard thống kê
+      nav("/admin", { replace: true });
+    } else if (role === "employee") {
+      // Nhân viên → trang quản lý đơn hàng
+      nav("/admin/orders", { replace: true });
+    } else {
+      // Khách → về trang chủ
+      nav("/", { replace: true });
     }
-  };
+  } catch (e) {
+    setErr(e?.response?.data?.message || "Đăng nhập thất bại.");
+  }
+};
+
 
   return (
     <div className="container py-5" style={{ maxWidth: 420 }}>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import { http } from "../../services/http";
 
 // Icons SVG gọn nhẹ
@@ -25,6 +26,13 @@ const UserIcon = (p) => (
     <circle cx="12" cy="7" r="4"></circle>
   </svg>
 );
+const BellIcon = (p) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+  </svg>
+);
 
 export default function Header() {
   const navigate   = useNavigate();
@@ -33,11 +41,13 @@ export default function Header() {
 
   const [openMenu, setOpenMenu]   = useState(false);
   const [openUser, setOpenUser]   = useState(false);
+  const [openNotif, setOpenNotif] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [cartCount, setCartCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [q, setQ] = useState("");
-
-  const token = useMemo(() => localStorage.getItem("token"), []);
+  const [token, setToken] = useState(localStorage.getItem("token"));
 
   useEffect(() => {
     http.get("/shop/cart")
@@ -46,6 +56,78 @@ export default function Header() {
         setCartCount(items.reduce((s, it) => s + (it.quantity || 0), 0));
       })
       .catch(() => setCartCount(0));
+  }, []);
+
+  // Lắng nghe khi giỏ hàng thay đổi
+  useEffect(() => {
+    const handleCartUpdated = async () => {
+      console.log("🛒 cartUpdated event triggered");
+      try {
+        const res = await http.get("/shop/cart");
+        const items = Array.isArray(res.data?.items) ? res.data.items : [];
+        const count = items.reduce((s, it) => s + (it.quantity || 0), 0);
+        console.log("📊 New cart count:", count);
+        setCartCount(count);
+      } catch (err) {
+        console.error("❌ Lỗi lấy giỏ hàng:", err);
+      }
+    };
+    window.addEventListener("cartUpdated", handleCartUpdated);
+    return () => window.removeEventListener("cartUpdated", handleCartUpdated);
+  }, []);
+
+  // Lắng nghe thay đổi token (khi đăng nhập/đăng xuất)
+  useEffect(() => {
+    const handleTokenChanged = () => {
+      setToken(localStorage.getItem("token"));
+    };
+    window.addEventListener("tokenChanged", handleTokenChanged);
+    return () => window.removeEventListener("tokenChanged", handleTokenChanged);
+  }, []);
+
+  // Lấy thông báo khi user đăng nhập
+  useEffect(() => {
+    if (!token) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+    
+    const fetchNotifications = async () => {
+      try {
+        const res = await http.get("/notification");
+        const notifs = Array.isArray(res.data) ? res.data : [];
+        setNotifications(notifs);
+        const unread = notifs.filter(n => !n.isRead).length;
+        setUnreadCount(unread);
+      } catch (err) {
+        console.error("❌ Lỗi lấy thông báo:", err);
+      }
+    };
+
+    fetchNotifications();
+    
+    // Poll every 10 seconds
+    const interval = setInterval(fetchNotifications, 10000);
+    return () => clearInterval(interval);
+  }, [token]);
+
+  // Lắng nghe khi có thông báo mới từ socket hoặc event
+  useEffect(() => {
+    const handleNotificationUpdated = async () => {
+      console.log("📬 notificationUpdated event triggered");
+      try {
+        const res = await http.get("/notification");
+        const notifs = Array.isArray(res.data) ? res.data : [];
+        setNotifications(notifs);
+        const unread = notifs.filter(n => !n.isRead).length;
+        setUnreadCount(unread);
+      } catch (err) {
+        console.error("❌ Lỗi lấy thông báo:", err);
+      }
+    };
+    window.addEventListener("notificationUpdated", handleNotificationUpdated);
+    return () => window.removeEventListener("notificationUpdated", handleNotificationUpdated);
   }, []);
 
   const onSearch = (e) => {
@@ -58,8 +140,9 @@ export default function Header() {
 
   const logout = () => {
     localStorage.removeItem("token");
+    setToken(null);
+    window.dispatchEvent(new Event("tokenChanged"));
     navigate("/");
-    window.location.reload();
   };
 
   // 🌊 Màu nền “xanh nhẹ nhàng” trên Home để hoà vào banner
@@ -129,6 +212,86 @@ export default function Header() {
               </span>
             )}
           </Link>
+
+          {/* Notification */}
+          {token && (
+            <div className="position-relative">
+              <button className="btn btn-sm btn-outline-secondary position-relative"
+                      onClick={() => setOpenNotif(v => !v)}
+                      title="Thông báo">
+                <BellIcon />
+                {unreadCount > 0 && (
+                  <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {openNotif && (
+                <div className="position-absolute end-0 mt-2 bg-white shadow rounded-3 border"
+                     style={{ minWidth: 350, maxHeight: 400, overflowY: 'auto', zIndex: 1000 }}>
+                  <div className="px-3 py-2 border-bottom bg-light d-flex justify-content-between align-items-center">
+                    <strong className="small">Thông báo ({notifications.length})</strong>
+                    {unreadCount > 0 && (
+                      <button className="btn btn-sm btn-link text-decoration-none small"
+                              onClick={async () => {
+                                try {
+                                  await http.post('/notification/mark-all-read');
+                                  setNotifications(prev => prev.map(n => ({...n, isRead: true})));
+                                  setUnreadCount(0);
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              }}>
+                        Đánh dấu đã đọc
+                      </button>
+                    )}
+                  </div>
+                  
+                  {notifications.length === 0 ? (
+                    <div className="text-center py-3 text-muted small">
+                      Không có thông báo
+                    </div>
+                  ) : (
+                    <div>
+                      {notifications.map((notif, idx) => (
+                        <div key={idx} 
+                             className={`px-3 py-2 border-bottom small cursor-pointer ${!notif.isRead ? 'bg-light' : ''}`}
+                             onClick={async () => {
+                               if (!notif.isRead) {
+                                 try {
+                                   await http.post(`/notification/${notif._id}/read`);
+                                   setNotifications(prev => 
+                                     prev.map(n => n._id === notif._id ? {...n, isRead: true} : n)
+                                   );
+                                   setUnreadCount(prev => Math.max(0, prev - 1));
+                                 } catch (err) {
+                                   console.error(err);
+                                 }
+                               }
+                             }}
+                             style={{ cursor: 'pointer' }}>
+                          <div className="d-flex justify-content-between align-items-start">
+                            <div className="flex-grow-1">
+                              <div className={`${!notif.isRead ? 'fw-bold' : ''}`}>
+                                {notif.message}
+                              </div>
+                              <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+                                {notif.createdAt ? new Date(notif.createdAt).toLocaleString('vi-VN') : ''}
+                              </div>
+                            </div>
+                            {!notif.isRead && (
+                              <span className="badge bg-primary ms-2" style={{ minWidth: '6px', minHeight: '6px', padding: '3px' }}></span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* User */}
           {!token ? (

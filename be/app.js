@@ -9,16 +9,19 @@ require('dotenv').config();
 
 const app = express();
 
-// KẾT NỐI MONGODB
+// KẾT NỐI MONaGODB
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log(' Kết nối CSDL gr2 thành công'))
     .catch(err => console.error(' Lỗi kết nối MongoDB:', err)); 
 
 // MIDDLEWARE 
 // 1. Kích hoạt CORS
+// Allow cross-origin requests from dev frontends. Using `origin: true` will
+// reflect the request origin, which is convenient during local development
+// (keeps cookies/session working across different local ports).
 app.use(cors({
-    origin: 'http://localhost:5173', 
-    credentials: true // Quan trọng để gửi Cookie/Session ID
+    origin: true,
+    credentials: true
 })); 
 
 // 2. Cấu hình Session
@@ -46,11 +49,19 @@ const authRoutes = require('./routes/auth');
 const shopRoutes = require('./routes/shop');
 const adminRoutes = require('./routes/admin');
 const Category = require('./models/category'); 
+const notificationRoutes = require('./routes/notification');
+const refundRoutes = require('./routes/refund');
 
 //  MOUNT ROUTES (THÊM /api) 
 app.use('/api/auth', authRoutes);
 app.use('/api/shop', shopRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/notification', notificationRoutes);
+app.use('/api/refunds', refundRoutes);
+// Thêm route cho / để trả về thông báo
+app.get('/', (req, res) => {
+    res.send('GR2 API Server đang chạy!');
+});
 
 // Tự động tạo  danh mục 
 (async () => {

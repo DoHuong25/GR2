@@ -42,10 +42,16 @@ const productSchema = new mongoose.Schema({
         ref: 'Category',
         required: true
     },
-    
+
+    type: {
+        type: String,
+        required: true,
+        trim: true
+    },
+
     // Mảng các biến thể 
     variants: [VariantSchema],
-    
+
     //  PHẦN ĐÁNH GIÁ 
     ratings: [
         {
@@ -72,7 +78,7 @@ const productSchema = new mongoose.Schema({
             //  Trường xác thực đã mua hàng
             isVerifiedPurchase: {
                 type: Boolean,
-                default: false 
+                default: false
             }
         }
     ],

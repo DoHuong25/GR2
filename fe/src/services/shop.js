@@ -1,3 +1,7 @@
+// Đánh giá sản phẩm
+export const rateProduct = async (productId, stars, comment) => {
+  return http.post(`/shop/products/${productId}/rate`, { stars, comment });
+};
 // --- shop.js ---
 import { http } from "./http";
 

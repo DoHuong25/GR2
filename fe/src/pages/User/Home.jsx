@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
-import { http } from "../../services/http"
+import { toast } from "react-toastify";
+import { http } from "../../services/http";
+
 /* icon giỏ hàng nhỏ */
 const ShoppingCartIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em"
@@ -23,23 +25,24 @@ export default function Home() {
       try {
         const [cRes, pRes] = await Promise.all([
           http.get("/shop/categories"),
-          http.get("/shop/products"), 
+          http.get("/shop/products"),
         ]);
 
         const wanted = ["Hải sản Tươi", "Hải sản Khô", "Hải sản Đông lạnh"];
         const norm = (s) => s?.normalize("NFC")?.toLowerCase();
         const fromApi = Array.isArray(cRes.data) ? cRes.data : (cRes.data?.categories || []);
-        const picked = wanted.map(n => fromApi.find(c => norm(c?.name) === norm(n))).filter(Boolean);
+        const picked = wanted
+          .map(n => fromApi.find(c => norm(c?.name) === norm(n)))
+          .filter(Boolean);
         setCats(picked.length ? picked : wanted.map((n, i) => ({ _id: `dummy-${i}`, name: n })));
 
-        // best: chỉ lấy 8 sản phẩm đầu
-        const rawBest = Array.isArray(pRes.data) ? pRes.data
+        const rawBest = Array.isArray(pRes.data)
+          ? pRes.data
           : (pRes.data?.products || pRes.data?.items || pRes.data?.data || pRes.data?.docs || []);
         console.log("[HOME] products raw =", pRes.data);
         console.log("[HOME] best arr     =", rawBest, "isArray?", Array.isArray(rawBest), "len:", rawBest?.length);
 
         setBest(rawBest.slice(0, 8));
-
       } finally {
         setLoading(false);
       }
@@ -77,7 +80,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/*  DANH MỤC  */}
+      {/* DANH MỤC */}
       <CategoryGrid categories={cats} />
 
       {/* SẢN PHẨM NỔI BẬT */}
@@ -105,7 +108,7 @@ export default function Home() {
           <div className="row g-4 align-items-center">
             <div className="col-md-6">
               <img
-                src="/image/ht3.jpg" 
+                src="/image/ht3.jpg"
                 className="img-fluid rounded-4 shadow-sm"
                 alt="Làng chài Hải Tiến"
                 onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/assets/ht2.png"; }}
@@ -126,13 +129,11 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      
     </div>
   );
 }
 
-/*Components */
+/* Components */
 function CategoryGrid({ categories }) {
   const names = ["Hải sản Tươi", "Hải sản Khô", "Hải sản Đông lạnh"];
   const norm = (s) => s?.normalize("NFC").toLowerCase();
@@ -145,14 +146,13 @@ function CategoryGrid({ categories }) {
     <section className="py-4 bg-white border-bottom">
       <div className="container">
         <div className="row g-3">
-          
+
           <div className="col-12 col-md-3">
             <div className="h-100 d-flex align-items-center justify-content-center rounded-4 border bg-light">
               <h3 className="h5 m-0 fw-bold text-uppercase">Danh mục</h3>
             </div>
           </div>
 
-          
           {three.map((c, i) => (
             <div className="col-12 col-md-3" key={c._id || i}>
               <Link
@@ -176,7 +176,7 @@ function CategoryGrid({ categories }) {
   );
 }
 
-// CARD SẢN PHẨM 
+// CARD SẢN PHẨM
 function ProductCard({ product }) {
   const navigate = useNavigate();
 
@@ -190,14 +190,21 @@ function ProductCard({ product }) {
 
   const addToCart = async (goCart = false) => {
     try {
+      const v = product?.variants?.[0];
+      if (!v?._id) {
+        toast.error("Sản phẩm không có biến thể hợp lệ.");
+        return;
+      }
       await http.post("/shop/cart", {
         productId: product._id,
+        variantId: v._id,
         quantity: 1,
-        variant: product?.variants?.[0]?.name || "",
       });
+      toast.success("✓ Đã thêm vào giỏ hàng!", { position: "top-right", autoClose: 2000 });
+      window.dispatchEvent(new Event("cartUpdated"));
       if (goCart) navigate("/cart");
     } catch (e) {
-      alert("Không thêm được giỏ hàng. Vui lòng thử lại.");
+      toast.error("Không thêm được giỏ hàng. Vui lòng thử lại.");
     }
   };
 
@@ -248,4 +255,3 @@ function ProductCard({ product }) {
     </div>
   );
 }
-

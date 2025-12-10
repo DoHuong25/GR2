@@ -19,14 +19,15 @@ const ensureCategories = async () => {
   const final = await Category.find({ name: { $in: names } });
 
   const fresh = final.find(c => c.name === 'Hải sản Tươi');
-  const dry   = final.find(c => c.name === 'Hải sản Khô');
-  const frozen= final.find(c => c.name === 'Hải sản Đông lạnh');
+  const dry = final.find(c => c.name === 'Hải sản Khô');
+  const frozen = final.find(c => c.name === 'Hải sản Đông lạnh');
   return { fresh, dry, frozen };
 };
 
 const sampleProducts = (freshId, dryId, frozenId, createdById) => ([
   {
     name: 'Tôm Sú Tự Nhiên',
+    type: 'Tôm',
     description: 'Tôm sú đánh bắt tự nhiên từ vùng biển Hải Tiến, thịt dai và ngọt.',
     image: '/images/products/tomsu.jpg',
     category: freshId,
@@ -39,6 +40,7 @@ const sampleProducts = (freshId, dryId, frozenId, createdById) => ([
   },
   {
     name: 'Mực Khô',
+    type: 'Mực',
     description: 'Mực khô phơi trực tiếp tại biển Thanh Hóa, ngọt tự nhiên, loại A.',
     image: '/images/products/muckho.jpg',
     category: dryId,
@@ -52,6 +54,7 @@ const sampleProducts = (freshId, dryId, frozenId, createdById) => ([
   },
   {
     name: 'Cá Thu Đông Lạnh',
+    type: 'Cá',
     description: 'Cá Thu tươi, cấp đông nhanh, tiện cho sốt cà, chiên, kho.',
     image: '/images/products/cathu.jpg',
     category: frozenId,
@@ -64,6 +67,7 @@ const sampleProducts = (freshId, dryId, frozenId, createdById) => ([
   },
   {
     name: 'Cá Thu Nướng Lát',
+    type: 'Cá',
     description: 'Nướng sơ, hút chân không, lý tưởng dự trữ.',
     image: '/images/products/cathunuong.jpg',
     category: dryId,
@@ -89,15 +93,28 @@ const seedDB = async () => {
     }
 
     // 2) Tạo admin & customer mẫu nếu chưa có (mật khẩu được hash)
-    let admin = await User.findOne({ role: 'admin' });
+    // admin 1
+    let admin = await User.findOne({ email: 'admin@haitien.com' });
     if (!admin) {
       admin = await User.create({
         username: 'admin_test',
         email: 'admin@haitien.com',
-        password: 'password123', // sẽ được hash bởi pre('save')
-        role: 'admin'
+        password: 'password123',
+        role: 'admin',
       });
-      console.log(' Đã tạo admin: admin@haitien.com / password123');
+      console.log('Đã tạo admin: admin@haitien.com / password123');
+    }
+
+    // admin 2
+    let admin1 = await User.findOne({ email: 'admin1@gmail.com' });
+    if (!admin1) {
+      admin1 = await User.create({
+        username: 'admin1',
+        email: 'admin1@gmail.com',
+        password: 'admin1',
+        role: 'admin',
+      });
+      console.log('Đã tạo admin: admin1@gmail.com / admin1');
     }
 
     let cust = await User.findOne({ email: 'khach1@haitien.com' });
@@ -105,17 +122,22 @@ const seedDB = async () => {
       cust = await User.create({
         username: 'khach1',
         email: 'khach1@haitien.com',
-        password: '123456', // sẽ được hash
+        password: 'a123456', // sẽ được hash
         role: 'customer'
       });
-      console.log(' Đã tạo customer: khach1@haitien.com / 123456');
+      console.log(' Đã tạo customer: khach1@haitien.com / a123456');
     }
 
-    // 3) Làm sạch & seed products
-    await Product.deleteMany({});
-    const docs = sampleProducts(fresh._id, dry._id, frozen._id, admin._id);
-    await Product.insertMany(docs);
-    console.log(` Đã chèn ${docs.length} sản phẩm mẫu!`);
+    //  Chỉ seed sản phẩm nếu hiện chưa có sản phẩm nào
+    const count = await Product.countDocuments();
+    if (count === 0) {
+      const docs = sampleProducts(fresh._id, dry._id, frozen._id, admin._id);
+      await Product.insertMany(docs);
+      console.log(` Đã chèn ${docs.length} sản phẩm mẫu!`);
+    } else {
+      console.log(` Đã có ${count} sản phẩm, không seed thêm.`);
+    }
+
   } catch (err) {
     console.error(' Lỗi khi Seed Database:', err.message);
   } finally {

@@ -9,6 +9,9 @@ const userSchema = new mongoose.Schema({
   phone:    String,
   address:  String,
   avatar:   String,
+  bio:      String,
+  note:     String,
+
   role:     { type: String, enum: ['admin', 'employee', 'customer'], default: 'customer' }
 }, { timestamps: true });
 
@@ -37,3 +40,4 @@ userSchema.pre('insertMany', async function(next, docs) {
 });
 
 module.exports = mongoose.model('User', userSchema);
+
