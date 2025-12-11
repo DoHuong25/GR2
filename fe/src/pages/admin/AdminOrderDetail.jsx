@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { http } from "../../services/http";
 
@@ -6,19 +6,37 @@ const money = (n) => Number(n || 0).toLocaleString("vi-VN");
 
 function badgeClass(status) {
   switch (status) {
-    case "Hoàn thành":
+    case "completed":
       return "bg-success-subtle text-success";
-    case "Đang xử lý":
-    case "Đang giao hàng":
-    case "Chờ thanh toán":
+    case "processing":
+    case "shipping":
+    case "pending":
       return "bg-primary-subtle text-primary";
-    case "Đã hủy":
-    case "Hoàn trả":
+    case "cancelled":
+    case "returned":
       return "bg-danger-subtle text-danger";
     default:
       return "bg-secondary-subtle text-secondary";
   }
 }
+
+const STATUS_MAP = {
+  "Chờ xác nhận": "pending",
+  "Đang xử lý": "processing",
+  "Đang giao hàng": "shipping",
+  "Hoàn thành": "completed",
+  "Đã hủy": "cancelled",
+  "Hoàn trả": "returned",
+};
+
+const REVERSE_STATUS_MAP = {
+  pending: "Chờ xác nhận",
+  processing: "Đang xử lý",
+  shipping: "Đang giao hàng",
+  completed: "Hoàn thành",
+  cancelled: "Đã hủy",
+  returned: "Hoàn trả",
+};
 
 export default function AdminOrderDetail() {
   const { orderId } = useParams();
@@ -26,15 +44,57 @@ export default function AdminOrderDetail() {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState(null);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [bankInfo, setBankInfo] = useState("");
 
-  const ALL_STATUSES = [
+  const currentUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("auth_user") || "{}");
+    } catch {
+      return {};
+    }
+  }, []);
+  const isEmployee = currentUser?.role === "employee";
+
+  const ALL_STATUSES_ADMIN = [
+    "Chờ xác nhận",
     "Đang xử lý",
     "Đang giao hàng",
     "Hoàn thành",
     "Đã hủy",
     "Hoàn trả",
-    "Chờ thanh toán",
   ];
+
+  const ALL_STATUSES_EMPLOYEE = [
+    "Chờ xác nhận",
+    "Đang xử lý",
+    "Đang giao hàng",
+    "Hoàn thành",
+  ];
+
+  // Hàm để lấy danh sách status được phép từ status hiện tại
+  const getAllowedNextStatuses = () => {
+    if (!order) return [];
+    const currentStatusDisplay = REVERSE_STATUS_MAP[order.status];
+    
+    let nextStatuses = [];
+    
+    if (currentStatusDisplay === "Chờ xác nhận") {
+      nextStatuses = ["Đang xử lý", "Đã hủy"];
+    } else if (currentStatusDisplay === "Đang xử lý") {
+      nextStatuses = ["Đang giao hàng"];
+    } else if (currentStatusDisplay === "Đang giao hàng") {
+      nextStatuses = isEmployee ? ["Hoàn thành"] : ["Hoàn thành", "Đã hủy"];
+    } else if (currentStatusDisplay === "Hoàn thành") {
+      nextStatuses = isEmployee ? [] : ["Hoàn trả"];
+    }
+    
+    return nextStatuses;
+  };
+
+  const allowedStatuses = isEmployee ? ALL_STATUSES_EMPLOYEE : ALL_STATUSES_ADMIN;
 
   useEffect(() => {
     fetchOrderDetail();
@@ -53,16 +113,99 @@ export default function AdminOrderDetail() {
     }
   };
 
-  const handleStatusChange = async (newStatus) => {
-    if (!newStatus || newStatus === order.status) return;
+  const handleStatusChange = async (newStatusDisplay) => {
+    if (!newStatusDisplay || REVERSE_STATUS_MAP[order.status] === newStatusDisplay) return;
 
+    const currentStatusDisplay = REVERSE_STATUS_MAP[order.status];
+
+    // Kiểm tra transition hợp lệ
+    // pending → processing (nhân viên xác nhận có hàng) hoặc pending → cancelled (hủy đơn)
+    if (currentStatusDisplay === "Chờ xác nhận") {
+      if (newStatusDisplay === "Đang xử lý") {
+        setPendingStatus(newStatusDisplay);
+        setShowConfirmModal(true);
+        return;
+      } else if (newStatusDisplay === "Đã hủy") {
+        // Nếu khách đã thanh toán, yêu cầu thông tin hoàn tiền
+        if (order.paymentMethod && order.paymentMethod !== "Thanh toán khi nhận hàng") {
+          setShowRefundModal(true);
+          setPendingStatus(newStatusDisplay);
+          return;
+        }
+        await confirmStatusChange(newStatusDisplay);
+        return;
+      } else {
+        alert("Từ trạng thái 'Chờ xác nhận' chỉ có thể chuyển sang 'Đang xử lý' hoặc 'Đã hủy'.");
+        return;
+      }
+    }
+
+    // processing → shipping (đang giao hàng)
+    if (currentStatusDisplay === "Đang xử lý") {
+      if (newStatusDisplay === "Đang giao hàng") {
+        await confirmStatusChange(newStatusDisplay);
+        return;
+      } else if (newStatusDisplay === "Chờ xác nhận") {
+        alert("Không thể quay lại 'Chờ xác nhận' từ 'Đang xử lý'.");
+        return;
+      } else {
+        alert("Từ trạng thái 'Đang xử lý' chỉ có thể chuyển sang 'Đang giao hàng'.");
+        return;
+      }
+    }
+
+    // shipping → completed (đã giao hàng)
+    if (currentStatusDisplay === "Đang giao hàng") {
+      if (newStatusDisplay === "Hoàn thành") {
+        await confirmStatusChange(newStatusDisplay);
+        return;
+      } else if (newStatusDisplay === "Đã hủy") {
+        // Người giao có thể hủy nếu khách từ chối
+        if (isEmployee) {
+          alert("Nhân viên không có quyền hủy đơn ở trạng thái này. Liên hệ admin.");
+          return;
+        }
+        await confirmStatusChange(newStatusDisplay);
+        return;
+      } else {
+        alert("Từ trạng thái 'Đang giao hàng' chỉ có thể chuyển sang 'Hoàn thành' hoặc 'Đã hủy'.");
+        return;
+      }
+    }
+
+    // completed → returned (hoàn trả, admin xử lý)
+    if (currentStatusDisplay === "Hoàn thành") {
+      if (newStatusDisplay === "Hoàn trả") {
+        if (isEmployee) {
+          alert("Nhân viên không có quyền hoàn trả đơn.");
+          return;
+        }
+        await confirmStatusChange(newStatusDisplay);
+        return;
+      } else {
+        alert("Đơn hàng đã hoàn thành. Admin có thể xử lý hoàn trả nếu cần.");
+        return;
+      }
+    }
+
+    // Chặn các transition không hợp lệ khác
+    alert("Chuyển đổi trạng thái này không được phép.");
+  };
+
+  const confirmStatusChange = async (newStatusDisplay) => {
     setUpdating(true);
     try {
+      const newStatusEnum = STATUS_MAP[newStatusDisplay];
       const res = await http.put(`/admin/orders/${orderId}/status`, {
-        status: newStatus,
+        status: newStatusEnum,
       });
       setOrder(res.data);
+      setShowConfirmModal(false);
+      setShowRefundModal(false);
+      setPendingStatus(null);
+      setBankInfo("");
       alert("Cập nhật trạng thái thành công!");
+      window.dispatchEvent(new Event("notificationUpdated"));
     } catch (err) {
       console.error(err);
       alert(err?.response?.data?.message || "Cập nhật thất bại.");
@@ -193,11 +336,14 @@ export default function AdminOrderDetail() {
                   className={`form-select form-select-sm ${badgeClass(
                     order.status
                   )}`}
-                  value={order.status}
+                  value={REVERSE_STATUS_MAP[order.status] || order.status}
                   onChange={(e) => handleStatusChange(e.target.value)}
                   disabled={updating}
                 >
-                  {ALL_STATUSES.map((s) => (
+                  <option value={REVERSE_STATUS_MAP[order.status]}>
+                    {REVERSE_STATUS_MAP[order.status]} (hiện tại)
+                  </option>
+                  {getAllowedNextStatuses().map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>
@@ -263,6 +409,104 @@ export default function AdminOrderDetail() {
           </div>
         </div>
       </div>
+
+      {/* Modal xác nhận chuyển đơn từ pending sang processing */}
+      {showConfirmModal && (
+        <div className="modal d-block" tabIndex="-1" style={{ background: "rgba(15,23,42,.35)" }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content rounded-4 border-0 shadow-lg">
+              <div className="modal-header border-0">
+                <h5 className="modal-title">Xác nhận chuẩn bị hàng</h5>
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={() => setShowConfirmModal(false)} 
+                />
+              </div>
+              <div className="modal-body">
+                <p className="mb-3">
+                  Bạn chắc chắn đơn hàng này có sẵn và sẽ chuẩn bị giao hàng?
+                </p>
+                <div className="alert alert-info small">
+                  <strong>Lưu ý:</strong> Nếu sản phẩm không có sẵn, vui lòng chọn "Đã hủy" để từ chối đơn.
+                </div>
+              </div>
+              <div className="modal-footer border-0">
+                <button
+                  type="button"
+                  className="btn btn-light"
+                  onClick={() => setShowConfirmModal(false)}
+                  disabled={updating}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => confirmStatusChange("Đang xử lý")}
+                  disabled={updating}
+                >
+                  {updating ? "Đang cập nhật..." : "Xác nhận"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal hoàn tiền */}
+      {showRefundModal && (
+        <div className="modal d-block" tabIndex="-1" style={{ background: "rgba(15,23,42,.35)" }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content rounded-4 border-0 shadow-lg">
+              <div className="modal-header border-0">
+                <h5 className="modal-title">Thông tin hoàn tiền</h5>
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={() => setShowRefundModal(false)} 
+                />
+              </div>
+              <div className="modal-body">
+                <p className="mb-3">
+                  Khách hàng đã thanh toán. Vui lòng cung cấp thông tin hoàn tiền:
+                </p>
+                <div className="mb-3">
+                  <label className="form-label small">Thông tin tài khoản ngân hàng (để hoàn tiền)</label>
+                  <textarea
+                    className="form-control"
+                    rows={4}
+                    placeholder="VD: Ngân hàng: Vietcombank&#10;Tên tài khoản: Nguyễn Văn A&#10;Số tài khoản: 1234567890"
+                    value={bankInfo}
+                    onChange={(e) => setBankInfo(e.target.value)}
+                  />
+                </div>
+                <div className="alert alert-warning small">
+                  <strong>Thông báo:</strong> Thông tin này sẽ được gửi đến khách hàng để họ biết cách nhận hoàn tiền.
+                </div>
+              </div>
+              <div className="modal-footer border-0">
+                <button
+                  type="button"
+                  className="btn btn-light"
+                  onClick={() => setShowRefundModal(false)}
+                  disabled={updating}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => confirmStatusChange("Đã hủy")}
+                  disabled={updating || !bankInfo.trim()}
+                >
+                  {updating ? "Đang xử lý..." : "Xác nhận hủy & gửi hoàn tiền"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

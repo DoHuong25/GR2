@@ -8,6 +8,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [err, setErr] = useState("");
+  const [roleFilter, setRoleFilter] = useState(null); // null = tất cả, "admin" = admin, "customer" = khách
   const nav = useNavigate();
 
   const onSubmit = async (e) => {
@@ -17,6 +18,16 @@ export default function Login() {
   try {
     const data = await Auth.login({ email, password });
     const role = data?.user?.role;
+
+    // Kiểm tra role filter
+    // roleFilter: null = tất cả, "admin" = admin/employee, "customer" = customer
+    if (roleFilter === "admin" && (role !== "admin" && role !== "employee")) {
+      setErr(`❌ Tài khoản này là ${role === 'customer' ? 'Khách hàng' : 'Khác'}. Vui lòng chọn loại tài khoản phù hợp.`);
+      return;
+    } else if (roleFilter === "customer" && role !== "customer") {
+      setErr(`❌ Tài khoản này là ${role === 'admin' ? 'Admin' : role === 'employee' ? 'Nhân viên' : 'Khác'}. Vui lòng chọn loại tài khoản phù hợp.`);
+      return;
+    }
 
     // Phát event để Header biết token thay đổi
     window.dispatchEvent(new Event("tokenChanged"));
@@ -41,6 +52,48 @@ export default function Login() {
     <div className="container py-5" style={{ maxWidth: 420 }}>
       <h2 className="text-center mb-4">Đăng nhập</h2>
       <form onSubmit={onSubmit} className="card p-4 shadow-sm rounded-4">
+        {/* Toggle role */}
+        <div className="mb-3">
+          <label className="form-label d-block">Loại tài khoản</label>
+          <div className="btn-group w-100" role="group">
+            <input 
+              type="radio" 
+              className="btn-check" 
+              name="roleFilter" 
+              id="roleAll"
+              checked={roleFilter === null}
+              onChange={() => setRoleFilter(null)}
+            />
+            <label className="btn btn-outline-secondary" htmlFor="roleAll">
+              Tất cả
+            </label>
+
+            <input 
+              type="radio" 
+              className="btn-check" 
+              name="roleFilter" 
+              id="roleAdmin"
+              checked={roleFilter === "admin"}
+              onChange={() => setRoleFilter("admin")}
+            />
+            <label className="btn btn-outline-danger" htmlFor="roleAdmin">
+              Admin/Nhân viên
+            </label>
+
+            <input 
+              type="radio" 
+              className="btn-check" 
+              name="roleFilter" 
+              id="roleCustomer"
+              checked={roleFilter === "customer"}
+              onChange={() => setRoleFilter("customer")}
+            />
+            <label className="btn btn-outline-success" htmlFor="roleCustomer">
+              Khách hàng
+            </label>
+          </div>
+        </div>
+
         <div className="mb-3">
           <label className="form-label">Email</label>
           <input className="form-control" type="email" value={email}

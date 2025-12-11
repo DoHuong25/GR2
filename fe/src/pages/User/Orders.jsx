@@ -89,15 +89,23 @@ export default function Orders() {
     setRatingLoading(true);
 
     try {
-      await http.post(`/shop/products/${ratingModal.productId}/rate`, {
+      console.log(`📤 Gửi đánh giá:`, {
+        productId: ratingModal.productId,
+        stars: ratingForm.stars,
+        comment: ratingForm.comment
+      });
+
+      const res = await http.post(`/shop/products/${ratingModal.productId}/rate`, {
         stars: ratingForm.stars,
         comment: ratingForm.comment,
       });
+
+      console.log(`✅ Đánh giá thành công:`, res.data);
       alert("Cảm ơn đánh giá của bạn!");
       closeRatingModal();
       fetchOrders();
     } catch (err) {
-      console.error(err);
+      console.error(`❌ Lỗi đánh giá:`, err);
       setRatingErr(
         err?.response?.data?.message || "Đánh giá thất bại. Vui lòng thử lại."
       );
@@ -362,17 +370,23 @@ export default function Orders() {
                             <button
                               key={item.product?._id}
                               className="btn btn-sm btn-outline-primary"
-                              onClick={() =>
+                              onClick={() => {
+                                console.log(`📝 Mở form đánh giá: OrderID=${order._id}, ProductID=${item.product?._id}`);
                                 openRatingModal(
                                   order._id,
                                   item.product?._id
-                                )
-                              }
+                                );
+                              }}
                             >
                               ⭐ Đánh giá{" "}
                               {item.product?.name?.slice(0, 10)}
                             </button>
                           ))}
+                        </div>
+                      )}
+                      {order.status !== "completed" && (
+                        <div className="text-muted small">
+                          (Chỉ có thể đánh giá khi đơn hàng hoàn thành. Trạng thái hiện tại: {REVERSE_STATUS_MAP[order.status]})
                         </div>
                       )}
                     </div>

@@ -8,6 +8,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
+  const [editingUser, setEditingUser] = useState(null); // {id, username, email, phone, address}
 
   const currentUser = useMemo(() => {
     try {
@@ -61,6 +62,36 @@ export default function AdminUsers() {
     if (!emp) return;
     setEmployees((prev) => [emp, ...prev]);
     setShowForm(false);
+  };
+
+  const openEditModal = async (user) => {
+    try {
+      // Fetch thêm thông tin nhân viên từ backend
+      const res = await http.get(`/admin/users/${user._id}`);
+      const fullUser = res.data;
+      setEditingUser({
+        id: fullUser._id,
+        username: fullUser.username || "",
+        email: fullUser.email || "",
+        phone: fullUser.phone || "",
+        address: fullUser.address || "",
+        password: fullUser.password || ""
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Không lấy được thông tin nhân viên.");
+    }
+  };
+
+  const closeEditModal = () => {
+    setEditingUser(null);
+  };
+
+  const onUpdated = (updatedUser) => {
+    setEmployees((prev) =>
+      prev.map((u) => (u._id === updatedUser._id ? updatedUser : u))
+    );
+    closeEditModal();
   };
 
   return (
@@ -153,6 +184,13 @@ export default function AdminUsers() {
                         <td className="text-end">
                           <button
                             type="button"
+                            className="btn btn-sm btn-outline-primary me-2"
+                            onClick={() => openEditModal(u)}
+                          >
+                            Sửa
+                          </button>
+                          <button
+                            type="button"
                             className="btn btn-sm btn-outline-danger"
                             onClick={() => removeEmployee(u)}
                           >
@@ -173,6 +211,14 @@ export default function AdminUsers() {
         <AddEmployeeModal
           onClose={() => setShowForm(false)}
           onAdded={onAdded}
+        />
+      )}
+
+      {isAdmin && editingUser && (
+        <EditEmployeeModal
+          user={editingUser}
+          onClose={closeEditModal}
+          onUpdated={onUpdated}
         />
       )}
     </div>
@@ -278,6 +324,236 @@ function AddEmployeeModal({ onClose, onAdded }) {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditEmployeeModal({ user, onClose, onUpdated }) {
+  const [tab, setTab] = useState("view"); // "view" hoặc "edit"
+  const [username, setUsername] = useState(user?.username || "");
+  const [email, setEmail] = useState(user?.email || "");
+  const [phone, setPhone] = useState(user?.phone || "");
+  const [address, setAddress] = useState(user?.address || "");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [showViewPwd, setShowViewPwd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setErr("");
+
+    if (!username || !email) {
+      setErr("Vui lòng nhập tên đăng nhập và email.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const updateData = {
+        username,
+        email,
+        phone,
+        address,
+      };
+      if (password) {
+        updateData.password = password;
+      }
+      const res = await http.put(`/admin/users/${user.id}`, updateData);
+      onUpdated(res.data);
+    } catch (error) {
+      console.error(error);
+      setErr(
+        error?.response?.data?.message ||
+          "Không cập nhật được thông tin."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="modal d-block"
+      tabIndex="-1"
+      style={{ background: "rgba(15,23,42,.35)" }}
+    >
+      <div className="modal-dialog modal-dialog-centered modal-lg">
+        <div className="modal-content rounded-4 border-0 shadow-lg">
+          <div className="modal-header border-0">
+            <h5 className="modal-title">Thông tin nhân viên</h5>
+            <button type="button" className="btn-close" onClick={onClose} />
+          </div>
+
+          {/* Tabs */}
+          <ul className="nav nav-tabs px-3 pt-3 border-0" role="tablist">
+            <li className="nav-item" role="presentation">
+              <button
+                className={`nav-link ${tab === "view" ? "active" : ""}`}
+                onClick={() => setTab("view")}
+              >
+                Xem thông tin
+              </button>
+            </li>
+            <li className="nav-item" role="presentation">
+              <button
+                className={`nav-link ${tab === "edit" ? "active" : ""}`}
+                onClick={() => setTab("edit")}
+              >
+                Sửa thông tin
+              </button>
+            </li>
+          </ul>
+
+          {/* Tab: View */}
+          {tab === "view" && (
+            <div className="modal-body">
+              <div className="row">
+                <div className="col-md-6">
+                  <div className="mb-3">
+                    <label className="form-label small text-muted">Tên đăng nhập</label>
+                    <div className="p-2 bg-light rounded fw-bold">{user.username || "—"}</div>
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <div className="mb-3">
+                    <label className="form-label small text-muted">Role</label>
+                    <div className="p-2 bg-light rounded">
+                      <span className="badge bg-warning text-dark">
+                        {user.role === "admin" ? "Admin" : "Nhân viên"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label small text-muted">Email</label>
+                <div className="p-2 bg-light rounded">{user.email || "—"}</div>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label small text-muted">Số điện thoại</label>
+                <div className="p-2 bg-light rounded">{user.phone || "—"}</div>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label small text-muted">Địa chỉ</label>
+                <div className="p-2 bg-light rounded">{user.address || "—"}</div>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label small text-muted">Mật khẩu</label>
+                <div className="input-group">
+                  <input
+                    type={showViewPwd ? "text" : "password"}
+                    className="form-control"
+                    value={user.password || ""}
+                    readOnly
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setShowViewPwd(!showViewPwd)}
+                    title={showViewPwd ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                  >
+                    {showViewPwd ? "Ẩn" : "Hiện"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab: Edit */}
+          {tab === "edit" && (
+            <form onSubmit={onSubmit}>
+              <div className="modal-body">
+                {err && <div className="alert alert-danger py-2">{err}</div>}
+
+                <div className="mb-3">
+                  <label className="form-label small">Tên đăng nhập</label>
+                  <input
+                    className="form-control"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label small">Email</label>
+                  <input
+                    type="email"
+                    className="form-control"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label small">Số điện thoại</label>
+                  <input
+                    type="tel"
+                    className="form-control"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="0123456789"
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label small">Địa chỉ</label>
+                  <input
+                    className="form-control"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Địa chỉ"
+                  />
+                </div>
+
+                <hr />
+
+                <div className="mb-3">
+                  <label className="form-label small">Mật khẩu mới (để trống nếu không đổi)</label>
+                  <div className="input-group">
+                    <input
+                      type={showPwd ? "text" : "password"}
+                      className="form-control"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Nhập mật khẩu mới"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => setShowPwd(!showPwd)}
+                      title={showPwd ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                    >
+                      {showPwd ? "Ẩn" : "Hiện"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer border-0">
+                <button
+                  type="button"
+                  className="btn btn-light"
+                  onClick={onClose}
+                  disabled={saving}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={saving}
+                >
+                  {saving ? "Đang lưu..." : "Cập nhật"}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>

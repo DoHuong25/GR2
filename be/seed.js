@@ -94,6 +94,7 @@ const seedDB = async () => {
 
     // 2) Tạo admin & customer mẫu nếu chưa có (mật khẩu được hash)
     // admin 1
+    console.log('📌 Bắt đầu tạo users...');
     let admin = await User.findOne({ email: 'admin@haitien.com' });
     if (!admin) {
       admin = await User.create({
@@ -103,6 +104,8 @@ const seedDB = async () => {
         role: 'admin',
       });
       console.log('Đã tạo admin: admin@haitien.com / password123');
+    } else {
+      console.log('✓ Admin admin@haitien.com đã tồn tại');
     }
 
     // admin 2
@@ -115,6 +118,40 @@ const seedDB = async () => {
         role: 'admin',
       });
       console.log('Đã tạo admin: admin1@gmail.com / admin1');
+    } else {
+      console.log('✓ Admin admin1@gmail.com đã tồn tại');
+    }
+
+    // Nhân viên 1
+    let emp1 = await User.findOne({ email: 'nhanvien1@gmail.com' });
+    if (!emp1) {
+      emp1 = await User.create({
+        username: 'nhanvien1',
+        email: 'nhanvien1@gmail.com',
+        password: '123456',
+        role: 'employee',
+        phone: '0901234567',
+        address: 'Hà Nội'
+      });
+      console.log('✅ Đã tạo nhân viên: nhanvien1@gmail.com / 123456');
+    } else {
+      console.log('✓ Nhân viên nhanvien1@gmail.com đã tồn tại');
+    }
+
+    // Nhân viên 2
+    let emp2 = await User.findOne({ email: 'nhanvien2@gmail.com' });
+    if (!emp2) {
+      emp2 = await User.create({
+        username: 'nhanvien2',
+        email: 'nhanvien2@gmail.com',
+        password: '123456',
+        role: 'employee',
+        phone: '0902345678',
+        address: 'Hồ Chí Minh'
+      });
+      console.log('✅ Đã tạo nhân viên: nhanvien2@gmail.com / 123456');
+    } else {
+      console.log('✓ Nhân viên nhanvien2@gmail.com đã tồn tại');
     }
 
     let cust = await User.findOne({ email: 'khach1@haitien.com' });
@@ -126,6 +163,8 @@ const seedDB = async () => {
         role: 'customer'
       });
       console.log(' Đã tạo customer: khach1@haitien.com / a123456');
+    } else {
+      console.log('✓ Customer khach1@haitien.com đã tồn tại');
     }
 
     //  Chỉ seed sản phẩm nếu hiện chưa có sản phẩm nào
